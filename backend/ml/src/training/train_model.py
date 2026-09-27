@@ -165,14 +165,14 @@ def train_lulc_model():
     X_val_f32 = np.asarray(X_val, dtype=np.float32)
     y_val_u8 = np.asarray(y_val, dtype=np.uint8)
 
-    final_n_est = best_params["n_estimators"]  # 300
-    final_max_depth = None                      # Restored unlimited depth from grid search
-    final_min_samples_leaf = 3                  # Regularized leaf size to allow deep trees without memory exhaustion
+    final_n_est = 300
+    final_max_depth = 30                        # Explicit bounded depth
+    final_min_samples_leaf = 3                  # Regularized leaf size
     final_max_samples = 0.35                    # Bootstrap ~3.14M pixels per tree for memory-safe training
 
-    print(f"Training final RandomForestClassifier with grid-search selected parameters:")
+    print(f"Training final RandomForestClassifier with parameters:")
     print(f"  - n_estimators     : {final_n_est}")
-    print(f"  - max_depth        : None (Unlimited depth)")
+    print(f"  - max_depth        : {final_max_depth}")
     print(f"  - min_samples_leaf : {final_min_samples_leaf}")
     print(f"  - max_samples      : {final_max_samples} (~3.14M pixels / tree)")
     print(f"  - class_weight     : {class_weight}")
@@ -184,7 +184,7 @@ def train_lulc_model():
         min_samples_leaf=final_min_samples_leaf,
         max_samples=final_max_samples,
         class_weight=class_weight,
-        n_jobs=8,
+        n_jobs=4,
         random_state=42
     )
 
@@ -242,7 +242,7 @@ def train_lulc_model():
     metadata_path = models_dir / "model_metadata.json"
     metadata = {
         "model_type": "RandomForestClassifier",
-        "version_note": "Phase 8 Corrected Model: Restored max_depth=None from grid search best config, verified class_weight='balanced', min_samples_leaf=3, max_samples=0.35 for memory-safe full-depth training.",
+        "version_note": "Optimized Compact Model: Bounded max_depth=30, class_weight='balanced', min_samples_leaf=3, max_samples=0.35, compress=3.",
         "training_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "training_samples_count": int(len(X_train)),
         "validation_samples_count": int(len(X_val)),

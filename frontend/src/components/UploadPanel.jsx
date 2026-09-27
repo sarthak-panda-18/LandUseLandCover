@@ -1,8 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileImage, AlertCircle, Play, CheckCircle2, RefreshCw, Layers, Sparkles } from 'lucide-react';
+import { UploadCloud, FileImage, AlertCircle, Play, CheckCircle2, RefreshCw, Layers, Sparkles, Cpu, Zap, BrainCircuit, Info } from 'lucide-react';
 import { getSampleTiles, fetchSampleTileFile } from '../services/api';
 
-export default function UploadPanel({ onClassify, isClassifying, error, onClearError }) {
+const MODEL_OPTIONS = [
+  {
+    id: 'pixel_rf',
+    title: 'Pixel-level (Random Forest)',
+    subtitle: 'Full detail, ~53s, 66% accuracy',
+    icon: Layers,
+    badge: '10m Pixel Resolution',
+  },
+  {
+    id: 'rf_patch',
+    title: 'Patch-level (Random Forest)',
+    subtitle: 'Fast, ~0.4s, 89% accuracy*',
+    icon: Zap,
+    badge: '64x64 Block',
+  },
+  {
+    id: 'efficientnet_patch',
+    title: 'Patch-level (EfficientNetB0)',
+    subtitle: 'Deep learning, ~10s, 87% accuracy*',
+    icon: BrainCircuit,
+    badge: '64x64 Block',
+  },
+];
+
+export default function UploadPanel({
+  onClassify,
+  isClassifying,
+  error,
+  onClearError,
+  selectedModel = 'pixel_rf',
+  onSelectModel,
+}) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -99,8 +130,19 @@ export default function UploadPanel({ onClassify, isClassifying, error, onClearE
     if (onClearError) onClearError();
   };
 
-  // Helper for dynamic loading stage message
-  const getLoadingMessage = (seconds) => {
+  // Helper for dynamic loading stage message based on active model
+  const getLoadingMessage = (seconds, model) => {
+    if (model === 'rf_patch') {
+      if (seconds < 1) return 'Extracting 64x64 blocks & computing 25 statistical features...';
+      if (seconds < 3) return 'Running fast Patch Random Forest inference...';
+      return 'Colorizing patch predictions & generating land cover statistics...';
+    }
+    if (model === 'efficientnet_patch') {
+      if (seconds < 3) return 'Extracting 64x64 blocks & preparing RGB composite batches...';
+      if (seconds < 8) return 'Running EfficientNetB0 neural network forward pass...';
+      return 'Assembling patch tensor predictions into full classification map...';
+    }
+    // Default pixel_rf
     if (seconds < 3) return 'Uploading & reading 5-band GeoTIFF raster...';
     if (seconds < 10) return 'Standardizing features [B2, B3, B4, B8, NDVI]...';
     if (seconds < 25) return 'Running Random Forest inference across ~1.2M pixels...';
@@ -154,7 +196,7 @@ export default function UploadPanel({ onClassify, isClassifying, error, onClearE
               <FileImage className="radar-icon" size={28} />
             </div>
             <div className="processing-title">Classifying Satellite Tile...</div>
-            <div className="processing-step">{getLoadingMessage(elapsedSeconds)}</div>
+            <div className="processing-step">{getLoadingMessage(elapsedSeconds, selectedModel)}</div>
             <div className="processing-timer">
               <RefreshCw className="spin-icon" size={14} />
               <span>Elapsed time: {elapsedSeconds}s</span>
@@ -224,6 +266,64 @@ export default function UploadPanel({ onClassify, isClassifying, error, onClearE
           </div>
         </div>
       )}
+
+      {/* Model Selection Segmented Group / Radio Cards */}
+      <div className="model-selector-section">
+        <div className="model-selector-header">
+          <span className="selector-title">Select Classification Model</span>
+          <span className="selector-count">{MODEL_OPTIONS.length} Models Available</span>
+        </div>
+
+        <div className="model-options-list" role="radiogroup" aria-label="Classification Model">
+          {MODEL_OPTIONS.map((opt) => {
+            const isSelected = selectedModel === opt.id;
+            const IconComponent = opt.icon;
+            return (
+              <div
+                key={opt.id}
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={isClassifying ? -1 : 0}
+                className={`model-option-card ${isSelected ? 'selected' : ''} ${
+                  isClassifying ? 'disabled' : ''
+                }`}
+                onClick={() => !isClassifying && onSelectModel && onSelectModel(opt.id)}
+                onKeyDown={(e) => {
+                  if ((e.key === ' ' || e.key === 'Enter') && !isClassifying && onSelectModel) {
+                    e.preventDefault();
+                    onSelectModel(opt.id);
+                  }
+                }}
+              >
+                <div className="model-radio-indicator">
+                  <div className={`radio-outer ${isSelected ? 'active' : ''}`}>
+                    {isSelected && <div className="radio-inner" />}
+                  </div>
+                </div>
+
+                <div className="model-card-content">
+                  <div className="model-card-top">
+                    <div className="model-title-wrap">
+                      <IconComponent size={16} className="model-icon" />
+                      <span className="model-title-text">{opt.title}</span>
+                    </div>
+                    <span className="model-badge">{opt.badge}</span>
+                  </div>
+                  <div className="model-subtitle-text">{opt.subtitle}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Small Asterisk Note */}
+        <div className="model-selector-note">
+          <Info size={13} className="note-icon" />
+          <span>
+            *Evaluated on a much smaller test set (328 blocks vs 1.9M pixels) — less statistically robust than the pixel-level accuracy figure.
+          </span>
+        </div>
+      </div>
 
       {/* Action Bar */}
       <div className="upload-actions">

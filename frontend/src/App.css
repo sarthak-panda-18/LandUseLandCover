@@ -1600,3 +1600,377 @@
   50% { opacity: 0.7; }
   100% { opacity: 0.3; }
 }
+
+/* ==========================================================================
+   Model Selector Component (Segmented Radio Group)
+   ========================================================================== */
+
+.model-selector-section {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-card);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.model-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.selector-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary);
+}
+
+.selector-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+  background: rgba(46, 134, 171, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(46, 134, 171, 0.2);
+}
+
+.model-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.model-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  background: #FFFFFF;
+  border: 1.5px solid var(--border-card);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  position: relative;
+}
+
+.model-option-card:hover {
+  border-color: var(--color-secondary);
+  background: rgba(46, 134, 171, 0.03);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(11, 57, 84, 0.06);
+}
+
+.model-option-card.selected {
+  border-color: var(--color-secondary);
+  background: linear-gradient(135deg, rgba(46, 134, 171, 0.08) 0%, rgba(241, 250, 238, 0.6) 100%);
+  box-shadow: 0 0 0 1px var(--color-secondary), 0 4px 12px rgba(46, 134, 171, 0.12);
+}
+
+.model-option-card.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.model-option-card:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+/* Custom Radio Indicator */
+.model-radio-indicator {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.radio-outer {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #94A3B8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  background: #FFFFFF;
+}
+
+.radio-outer.active {
+  border-color: var(--color-secondary);
+  background: #FFFFFF;
+}
+
+.radio-inner {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  animation: scaleIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.model-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.model-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.model-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.model-icon {
+  color: var(--color-secondary);
+  flex-shrink: 0;
+}
+
+.model-title-text {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.model-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: rgba(52, 78, 92, 0.08);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.model-option-card.selected .model-badge {
+  background: rgba(46, 134, 171, 0.15);
+  color: var(--color-secondary);
+  font-weight: 700;
+}
+
+.model-subtitle-text {
+  font-size: 0.775rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.model-option-card.selected .model-subtitle-text {
+  color: #334155;
+}
+
+.model-selector-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.725rem;
+  color: #64748B;
+  background: rgba(241, 245, 249, 0.8);
+  border: 1px solid rgba(203, 213, 225, 0.7);
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  line-height: 1.4;
+  margin-top: 0.15rem;
+}
+
+.note-icon {
+  color: var(--color-secondary);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* ==========================================================================
+   Patch Resolution Banner (ClassifiedMapView)
+   ========================================================================== */
+
+.patch-resolution-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-left: 4px solid #F59E0B;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.patch-banner-icon {
+  color: #D97706;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.patch-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.775rem;
+  color: #92400E;
+  line-height: 1.35;
+}
+
+.patch-banner-text strong {
+  font-weight: 700;
+  color: #78350F;
+}
+
+.badge-patch-res {
+  font-size: 0.675rem;
+  font-weight: 700;
+  color: #D97706;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Telemetry & Grassland Warning Banner (ModelStatsPanel)
+   ========================================================================== */
+
+.badge-granularity {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: rgba(52, 78, 92, 0.08);
+  border: 1px solid var(--border-card);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+}
+
+.grassland-alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: #FEF2F2;
+  border: 1.5px solid #FECACA;
+  border-left: 5px solid #EF4444;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1.15rem;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.08);
+}
+
+.grassland-alert-icon {
+  color: #DC2626;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.grassland-alert-content {
+  flex: 1;
+}
+
+.grassland-alert-content strong {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: #991B1B;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.grassland-alert-content p {
+  margin: 0;
+  font-size: 0.785rem;
+  color: #B91C1C;
+  line-height: 1.45;
+}
+
+.f1-badge.f1-zero {
+  background: rgba(239, 68, 68, 0.15);
+  color: #DC2626;
+  font-weight: 700;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.row-warning {
+  background: rgba(254, 242, 242, 0.6);
+}
+
+.cell-warning-tag {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #DC2626;
+  background: #FEE2E2;
+  border: 1px solid #FECACA;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  margin-left: 0.45rem;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
+.patch-features-card {
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.patch-feature-description {
+  margin: 0.4rem 0 0;
+  font-size: 0.825rem;
+  color: #334155;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.special-notes-box {
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 8px;
+  padding: 0.75rem 0.95rem;
+  margin-top: 0.85rem;
+}
+
+.special-notes-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.4rem;
+}
+
+.special-notes-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.775rem;
+  color: #475569;
+  line-height: 1.4;
+}
+

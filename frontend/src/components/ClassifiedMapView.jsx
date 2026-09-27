@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Map, Download, Eye, Sparkles, Compass, Clock, Grid, Maximize2, Layers } from 'lucide-react';
+import { Map, Download, Eye, Sparkles, Compass, Clock, Grid, Maximize2, Layers, AlertCircle, Info, Zap, BrainCircuit } from 'lucide-react';
 import { getLegendUrl } from '../services/api';
 
 export default function ClassifiedMapView({ result }) {
@@ -23,6 +23,7 @@ export default function ClassifiedMapView({ result }) {
 
   const {
     filename,
+    model_used,
     dimensions,
     total_pixels,
     valid_pixels,
@@ -30,14 +31,24 @@ export default function ClassifiedMapView({ result }) {
     processing_time_seconds,
     classified_image_base64,
     rgb_preview_base64,
+    patch_analytics,
     geo_metadata,
   } = result;
+
+  const isPatchModel = model_used === 'rf_patch' || model_used === 'efficientnet_patch' || Boolean(patch_analytics);
+
+  const getModelLabel = () => {
+    if (model_used === 'rf_patch') return 'Patch Random Forest (64x64)';
+    if (model_used === 'efficientnet_patch') return 'Patch EfficientNetB0 (64x64)';
+    return 'Pixel Random Forest (10m)';
+  };
 
   const handleDownload = () => {
     if (!classified_image_base64) return;
     const link = document.createElement('a');
     link.href = classified_image_base64;
-    link.download = `${filename ? filename.replace(/\.[^/.]+$/, '') : 'tile'}_lulc_classified.png`;
+    const modelTag = model_used ? `_${model_used}` : '';
+    link.download = `${filename ? filename.replace(/\.[^/.]+$/, '') : 'tile'}${modelTag}_lulc_classified.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -49,6 +60,9 @@ export default function ClassifiedMapView({ result }) {
         <div className="header-title-group">
           <Map className="icon-secondary" size={20} />
           <h2>Classified LULC Map View</h2>
+          {isPatchModel && (
+            <span className="badge-patch-res">64x64 Blocks</span>
+          )}
         </div>
         
         <div className="header-actions">
@@ -98,11 +112,32 @@ export default function ClassifiedMapView({ result }) {
         </div>
       </div>
 
+      {/* Notice Banner for 64x64 Block / Patch Models with Visual Smoothing */}
+      {result.visual_smoothing_applied ? (
+        <div className="patch-resolution-banner">
+          <Info size={18} className="patch-banner-icon" />
+          <div className="patch-banner-text">
+            <strong>Visual smoothing applied — underlying classification resolution is still 64x64 blocks.</strong>
+            <span>Smoothing softens block edges for readability; it does not add real classification detail.</span>
+          </div>
+        </div>
+      ) : isPatchModel ? (
+        <div className="patch-resolution-banner">
+          <Info size={16} className="patch-banner-icon" />
+          <div className="patch-banner-text">
+            <strong>64x64 block resolution — coarser detail than pixel-level</strong>
+            <span>Predictions are assigned per 64x64 block rather than per individual 10m pixel.</span>
+          </div>
+        </div>
+      ) : null}
+
       {/* Main Map Viewer Area */}
       <div className="map-display-container">
         {viewMode === 'classified' && (
           <div className="single-map-view">
-            <div className="map-badge">Predicted LULC Classification (6 Classes)</div>
+            <div className="map-badge">
+              {getModelLabel()} • 6 Classes
+            </div>
             <img
               src={classified_image_base64}
               alt="Classified LULC Map"
@@ -133,7 +168,7 @@ export default function ClassifiedMapView({ result }) {
               />
             </div>
             <div className="split-pane">
-              <div className="map-badge">Random Forest LULC Map</div>
+              <div className="map-badge">{getModelLabel()}</div>
               <img
                 src={classified_image_base64}
                 alt="Classified LULC Map"
@@ -200,7 +235,7 @@ export default function ClassifiedMapView({ result }) {
             <div className="meta-text">
               <span className="meta-label">Dimensions</span>
               <span className="meta-val">
-                {dimensions?.width} × {dimensions?.height} px ({total_pixels?.toLocaleString()} total)
+                {dimensions?.width} × {dimensions?.height} px {patch_analytics ? `(${patch_analytics.total_blocks} blocks)` : `(${total_pixels?.toLocaleString()} px)`}
               </span>
             </div>
           </div>

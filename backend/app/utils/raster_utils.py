@@ -93,9 +93,21 @@ def read_geotiff_bytes(file_bytes: bytes) -> Tuple[np.ndarray, Dict[str, any]]:
         raise ValueError(f"Error parsing uploaded raster: {str(e)}")
 
 
-def classified_array_to_png_bytes(classified_array: np.ndarray) -> bytes:
+def classified_array_to_png_bytes(
+    classified_array: np.ndarray,
+    apply_smoothing: bool = False,
+    blur_radius: float = 4.0
+) -> bytes:
     """
     Converts a 2D integer class array (H, W) into an RGBA PNG byte buffer.
+    
+    IMPORTANT ARCHITECTURAL SEPARATION:
+    - The classification metrics, per-class pixel counts, percentages, and analytics
+      are strictly computed on the raw discrete integer class array BEFORE this function.
+    - The Gaussian blur smoothing applied here is STRICTLY visual/cosmetic for display
+      purposes on block-level patch predictions (rf_patch, efficientnet_patch).
+    - Transparent / masked pixels (value 255) are preserved sharply by keeping the original
+      binary alpha channel intact so transparency never bleeds into classified regions.
     """
     height, width = classified_array.shape
     rgba_image = np.zeros((height, width, 4), dtype=np.uint8)
@@ -105,16 +117,37 @@ def classified_array_to_png_bytes(classified_array: np.ndarray) -> bytes:
         rgba_image[mask] = rgba
 
     img = Image.fromarray(rgba_image, mode="RGBA")
+
+    if apply_smoothing:
+        from PIL import ImageFilter
+        # 1. Split RGBA channels
+        r, g, b, a = img.split()
+        # 2. Merge RGB channels and apply Gaussian blur to the color image only
+        rgb_img = Image.merge("RGB", (r, g, b))
+        blurred_rgb = rgb_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+        # 3. Re-attach the original sharp unblurred alpha channel (preserving transparent masked areas)
+        br, bg, bb = blurred_rgb.split()
+        img = Image.merge("RGBA", (br, bg, bb, a))
+
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-def classified_array_to_base64(classified_array: np.ndarray) -> str:
+def classified_array_to_base64(
+    classified_array: np.ndarray,
+    apply_smoothing: bool = False,
+    blur_radius: float = 4.0
+) -> str:
     """
     Converts a 2D integer class array into a data URL base64 string: 'data:image/png;base64,...'
+    Optionally applies visual-only smoothing to soften 64x64 block boundaries for patch models.
     """
-    png_bytes = classified_array_to_png_bytes(classified_array)
+    png_bytes = classified_array_to_png_bytes(
+        classified_array,
+        apply_smoothing=apply_smoothing,
+        blur_radius=blur_radius
+    )
     b64_str = base64.b64encode(png_bytes).decode("utf-8")
     return f"data:image/png;base64,{b64_str}"
 

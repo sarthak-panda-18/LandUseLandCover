@@ -31,12 +31,18 @@ export async function checkHealth() {
 }
 
 /**
- * Fetches trained Random Forest model metadata, hyperparameters,
- * feature importances, and Phase 5 evaluation test metrics.
+ * Fetches trained model metadata, hyperparameters,
+ * feature importances / feature specs, and evaluation test metrics.
+ * 
+ * @param {string} modelChoice - 'pixel_rf' | 'rf_patch' | 'efficientnet_patch'
  */
-export async function getModelInfo() {
+export async function getModelInfo(modelChoice = 'pixel_rf') {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/model-info`, {
+    const url = new URL(`${API_BASE_URL}/api/model-info`);
+    if (modelChoice) {
+      url.searchParams.set('model', modelChoice);
+    }
+    const res = await fetch(url.toString(), {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
     });
@@ -52,7 +58,7 @@ export async function getModelInfo() {
 
     return await res.json();
   } catch (error) {
-    console.error('API getModelInfo error:', error);
+    console.error(`API getModelInfo (${modelChoice}) error:`, error);
     throw error;
   }
 }
@@ -68,9 +74,10 @@ export function getLegendUrl() {
  * Uploads a Sentinel-2 GeoTIFF (.tif / .tiff) file to be classified by the backend model.
  * 
  * @param {File} file - GeoTIFF raster file
+ * @param {string} modelChoice - Selected model ('pixel_rf' | 'rf_patch' | 'efficientnet_patch')
  * @returns {Promise<Object>} Classification result including base64 image, class distribution, and stats.
  */
-export async function classifyTile(file) {
+export async function classifyTile(file, modelChoice = 'pixel_rf') {
   if (!file) {
     throw new Error('Please select a valid GeoTIFF (.tif) file to classify.');
   }
@@ -92,6 +99,7 @@ export async function classifyTile(file) {
 
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('model', modelChoice || 'pixel_rf');
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/classify`, {

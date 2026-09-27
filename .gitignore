@@ -23,6 +23,10 @@ htmlcov/
 backend/ml/models/*
 !backend/ml/models/.gitkeep
 !backend/ml/models/model_metadata.json
+!backend/ml/models/scaler.joblib
+!backend/ml/models/lulc_rf_model.joblib
+!backend/ml/models_patch/
+!backend/ml/models_patch/**
 
 # Satellite & raster data (large .tif files and raw datasets)
 dataset/

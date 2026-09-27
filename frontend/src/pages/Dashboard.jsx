@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Satellite,
   Activity,
@@ -17,6 +17,9 @@ import ClassBreakdownChart from '../components/ClassBreakdownChart';
 import ModelStatsPanel from '../components/ModelStatsPanel';
 
 export default function Dashboard() {
+  // Model Selection State
+  const [selectedModel, setSelectedModel] = useState('pixel_rf');
+
   // Backend & Telemetry State
   const [modelInfo, setModelInfo] = useState(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
@@ -29,12 +32,23 @@ export default function Dashboard() {
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifyError, setClassifyError] = useState(null);
 
-  // Fetch telemetry & check backend status on load
-  const loadInitialData = async () => {
-    setIsCheckingHealth(true);
+  // Fetch telemetry for the selected model
+  const fetchTelemetry = useCallback(async (modelChoice) => {
     setIsModelLoading(true);
     setModelError(null);
+    try {
+      const info = await getModelInfo(modelChoice);
+      setModelInfo(info);
+    } catch (err) {
+      setModelError(err.message || 'Failed to load model telemetry');
+    } finally {
+      setIsModelLoading(false);
+    }
+  }, []);
 
+  // Fetch telemetry & check backend status on load or refresh
+  const loadInitialData = async () => {
+    setIsCheckingHealth(true);
     try {
       const healthRes = await checkHealth();
       setBackendHealthy(healthRes?.status === 'ok' && healthRes?.model_loaded);
@@ -45,19 +59,25 @@ export default function Dashboard() {
       setIsCheckingHealth(false);
     }
 
-    try {
-      const info = await getModelInfo();
-      setModelInfo(info);
-    } catch (err) {
-      setModelError(err.message || 'Failed to load model telemetry');
-    } finally {
-      setIsModelLoading(false);
-    }
+    await fetchTelemetry(selectedModel);
   };
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  // Handle switching model choice
+  const handleModelSelect = (modelId) => {
+    if (modelId === selectedModel) return;
+    setSelectedModel(modelId);
+
+    // Requirement 5: Do NOT auto-reclassify. Clear old results to avoid confusion about which model produced what's shown.
+    setClassificationResult(null);
+    setClassifyError(null);
+
+    // Fetch telemetry for the newly selected model
+    fetchTelemetry(modelId);
+  };
 
   // Handler for tile classification request
   const handleClassify = async (file) => {
@@ -65,7 +85,7 @@ export default function Dashboard() {
     setClassifyError(null);
 
     try {
-      const result = await classifyTile(file);
+      const result = await classifyTile(file, selectedModel);
       setClassificationResult(result);
     } catch (err) {
       setClassifyError(err.message || 'An unexpected error occurred during classification.');
@@ -86,7 +106,7 @@ export default function Dashboard() {
             <div className="brand-text">
               <h1 className="brand-title">Sentinel-2 LULC AI Engine</h1>
               <p className="brand-subtitle">
-                Multispectral Land Use & Land Cover Random Forest Classifier
+                Multispectral Land Use & Land Cover Random Forest & Deep Learning Classifiers
               </p>
             </div>
           </div>
@@ -94,7 +114,7 @@ export default function Dashboard() {
           <div className="header-status-group">
             <div
               className={`health-pill ${backendHealthy ? 'healthy' : 'unhealthy'}`}
-              title={backendHealthy ? 'FastAPI Backend & ML Model Online' : 'Backend offline'}
+              title={backendHealthy ? 'FastAPI Backend & ML Models Online' : 'Backend offline'}
             >
               <span className="status-dot"></span>
               <span>{backendHealthy ? 'Model Engine Ready' : 'Backend Offline'}</span>
@@ -146,6 +166,8 @@ export default function Dashboard() {
                 isClassifying={isClassifying}
                 error={classifyError}
                 onClearError={() => setClassifyError(null)}
+                selectedModel={selectedModel}
+                onSelectModel={handleModelSelect}
               />
 
               {classificationResult && (
@@ -164,7 +186,7 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="dashboard-footer">
         <div className="container footer-content">
-          <span>LULC Classification System • Sentinel-2 10m Multispectral Imagery • Random Forest Classifier</span>
+          <span>LULC Classification System • Sentinel-2 10m Multispectral Imagery • Pixel RF & Patch Models</span>
         </div>
       </footer>
     </div>
