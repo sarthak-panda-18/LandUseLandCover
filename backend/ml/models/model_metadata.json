@@ -1,0 +1,98 @@
+{
+  "model_type": "RandomForestClassifier",
+  "version_note": "Phase 8 Corrected Model: Restored max_depth=None from grid search best config, verified class_weight='balanced', min_samples_leaf=3, max_samples=0.35 for memory-safe full-depth training.",
+  "training_date": "2026-09-27 14:31:50",
+  "training_samples_count": 8976744,
+  "validation_samples_count": 1923588,
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": null,
+    "min_samples_leaf": 3,
+    "max_samples": 0.35,
+    "class_weight": "balanced",
+    "random_state": 42
+  },
+  "metrics": {
+    "training_accuracy_subset": 0.788,
+    "validation_accuracy": 0.7288,
+    "per_class_validation_accuracy": {
+      "Water": 0.8645,
+      "Trees/Forest": 0.7124,
+      "Crops": 0.734,
+      "Grassland": 0.259,
+      "Built-up": 0.669,
+      "Bare land": 0.9276
+    }
+  },
+  "feature_importances": {
+    "B2 (Blue)": 0.1861,
+    "B3 (Green)": 0.1978,
+    "B4 (Red)": 0.2319,
+    "B8 (NIR)": 0.2208,
+    "NDVI": 0.1634
+  },
+  "class_mapping": {
+    "0": "Water",
+    "1": "Trees/Forest",
+    "2": "Crops",
+    "3": "Grassland",
+    "4": "Built-up",
+    "5": "Bare land"
+  },
+  "grid_search_history": [
+    {
+      "n_estimators": 100,
+      "max_depth": 20,
+      "val_accuracy": 0.6836,
+      "fit_time_seconds": 6.21
+    },
+    {
+      "n_estimators": 100,
+      "max_depth": 30,
+      "val_accuracy": 0.7347,
+      "fit_time_seconds": 6.83
+    },
+    {
+      "n_estimators": 100,
+      "max_depth": null,
+      "val_accuracy": 0.7412,
+      "fit_time_seconds": 7.07
+    },
+    {
+      "n_estimators": 200,
+      "max_depth": 20,
+      "val_accuracy": 0.6834,
+      "fit_time_seconds": 12.3
+    },
+    {
+      "n_estimators": 200,
+      "max_depth": 30,
+      "val_accuracy": 0.7367,
+      "fit_time_seconds": 14.5
+    },
+    {
+      "n_estimators": 200,
+      "max_depth": null,
+      "val_accuracy": 0.7428,
+      "fit_time_seconds": 14.74
+    },
+    {
+      "n_estimators": 300,
+      "max_depth": 20,
+      "val_accuracy": 0.6833,
+      "fit_time_seconds": 19.43
+    },
+    {
+      "n_estimators": 300,
+      "max_depth": 30,
+      "val_accuracy": 0.737,
+      "fit_time_seconds": 22.25
+    },
+    {
+      "n_estimators": 300,
+      "max_depth": null,
+      "val_accuracy": 0.7436,
+      "fit_time_seconds": 22.68
+    }
+  ]
+}

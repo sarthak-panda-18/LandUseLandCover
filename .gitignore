@@ -1,0 +1,64 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Model artifacts
+*.joblib
+*.pkl
+*.pickle
+*.h5
+*.pt
+*.pth
+backend/ml/models/*
+!backend/ml/models/.gitkeep
+!backend/ml/models/model_metadata.json
+
+# Satellite & raster data (large .tif files and raw datasets)
+dataset/
+*.tif
+*.tiff
+*.geotiff
+*.jp2
+*.nc
+*.hdf
+*.npz
+*.zip
+backend/ml/data/input/*
+!backend/ml/data/input/.gitkeep
+backend/ml/data/labels/*
+!backend/ml/data/labels/.gitkeep
+backend/ml/data/processed/*
+!backend/ml/data/processed/.gitkeep
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm/
+
+# Logs & Environment
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.env
+.env.local
+.env.*.local
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

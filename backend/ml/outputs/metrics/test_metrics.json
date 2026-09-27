@@ -1,0 +1,113 @@
+{
+  "evaluation_timestamp": "2026-09-27 14:40:49",
+  "test_dataset_path": "E:\\ML Claude\\lulc-project\\backend\\ml\\data\\processed\\test.npz",
+  "total_test_samples": 1923589,
+  "summary_metrics": {
+    "overall_accuracy": 0.7284,
+    "cohen_kappa": 0.599,
+    "macro_avg_f1": 0.6476,
+    "weighted_avg_f1": 0.738
+  },
+  "per_class_metrics": {
+    "Water": {
+      "class_id": 0,
+      "precision": 0.8804,
+      "recall": 0.8644,
+      "f1_score": 0.8723,
+      "support_pixels": 139986
+    },
+    "Trees/Forest": {
+      "class_id": 1,
+      "precision": 0.581,
+      "recall": 0.7127,
+      "f1_score": 0.6402,
+      "support_pixels": 326955
+    },
+    "Crops": {
+      "class_id": 2,
+      "precision": 0.8123,
+      "recall": 0.7335,
+      "f1_score": 0.7709,
+      "support_pixels": 994202
+    },
+    "Grassland": {
+      "class_id": 3,
+      "precision": 0.0515,
+      "recall": 0.2622,
+      "f1_score": 0.0861,
+      "support_pixels": 10632
+    },
+    "Built-up": {
+      "class_id": 4,
+      "precision": 0.7264,
+      "recall": 0.6684,
+      "f1_score": 0.6962,
+      "support_pixels": 400966
+    },
+    "Bare land": {
+      "class_id": 5,
+      "precision": 0.7348,
+      "recall": 0.9282,
+      "f1_score": 0.8203,
+      "support_pixels": 50848
+    }
+  },
+  "confusion_matrix_counts": [
+    [
+      121001,
+      4995,
+      5769,
+      754,
+      4305,
+      3162
+    ],
+    [
+      3366,
+      233007,
+      72385,
+      5458,
+      12557,
+      182
+    ],
+    [
+      7055,
+      135854,
+      729210,
+      38565,
+      80790,
+      2728
+    ],
+    [
+      35,
+      1159,
+      6093,
+      2788,
+      556,
+      1
+    ],
+    [
+      5266,
+      25992,
+      84135,
+      6597,
+      268015,
+      10961
+    ],
+    [
+      721,
+      5,
+      162,
+      1,
+      2762,
+      47197
+    ]
+  ],
+  "class_label_mapping": {
+    "0": "Water",
+    "1": "Trees/Forest",
+    "2": "Crops",
+    "3": "Grassland",
+    "4": "Built-up",
+    "5": "Bare land"
+  }
+}
