@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { AlertCircle, Satellite, Info, ShieldCheck, Sparkles, Layers } from 'lucide-react';
 
 export default function LandingIntro() {
@@ -11,6 +12,7 @@ export default function LandingIntro() {
     if (!container) return;
 
     let scene, camera, renderer, animationFrameId;
+    let controls, resumeTimeout;
     let worldGroup, satellitePivot;
     let resizeObserver;
 
@@ -35,9 +37,35 @@ export default function LandingIntro() {
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setClearColor(0x000000, 0); // Transparent background
+      renderer.domElement.style.touchAction = 'pan-y';
+      renderer.domElement.style.cursor = 'grab';
       container.appendChild(renderer.domElement);
 
-      // 4. Lighting (Warm ambient + directional highlights)
+      // 4. Interactive OrbitControls (Rotate-only, no zoom or pan to allow natural page scrolling)
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.enableZoom = false; // Disable zooming so page scrolling is uninterrupted
+      controls.enablePan = false;  // Keep rotate-only
+      controls.autoRotate = true;  // Slow auto-rotation
+      controls.autoRotateSpeed = 1.0;
+
+      controls.addEventListener('start', () => {
+        if (resumeTimeout) clearTimeout(resumeTimeout);
+        controls.autoRotate = false;
+        if (renderer.domElement) renderer.domElement.style.cursor = 'grabbing';
+      });
+
+      controls.addEventListener('end', () => {
+        if (renderer.domElement) renderer.domElement.style.cursor = 'grab';
+        if (resumeTimeout) clearTimeout(resumeTimeout);
+        // Resume auto-rotation 2 seconds after user stops dragging
+        resumeTimeout = setTimeout(() => {
+          controls.autoRotate = true;
+        }, 2000);
+      });
+
+      // 5. Lighting (Warm ambient + directional highlights)
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
       scene.add(ambientLight);
 
@@ -49,7 +77,7 @@ export default function LandingIntro() {
       dirLight2.position.set(-6, -4, -4);
       scene.add(dirLight2);
 
-      // 5. Stylized Low-Poly Earth Globe & Satellite System
+      // 6. Stylized Low-Poly Earth Globe & Satellite System
       worldGroup = new THREE.Group();
       scene.add(worldGroup);
 
@@ -151,16 +179,15 @@ export default function LandingIntro() {
 
       satellitePivot.add(satModel);
 
-      // 6. Smooth Animation Loop
+      // 7. Smooth Animation Loop
       let prevTime = performance.now();
       const animate = (currentTime) => {
         animationFrameId = requestAnimationFrame(animate);
         const delta = Math.min((currentTime - prevTime) / 1000, 0.1);
         prevTime = currentTime;
 
-        // Continuous slow decorative rotation
-        worldGroup.rotation.y += delta * 0.25;
-        worldGroup.rotation.x = Math.sin(currentTime * 0.0005) * 0.1;
+        // Update OrbitControls (handles smooth damping & autoRotate)
+        controls.update();
 
         // Satellite orbital rotation
         satellitePivot.rotation.z += delta * 0.45;
@@ -171,7 +198,7 @@ export default function LandingIntro() {
 
       animate(performance.now());
 
-      // 7. Responsive Resizing
+      // 8. Responsive Resizing
       const handleResize = () => {
         if (!container || !renderer || !camera) return;
         const newW = container.clientWidth;
@@ -194,9 +221,11 @@ export default function LandingIntro() {
       setWebglSupported(false);
     }
 
-    // 8. Cleanup & Disposal on Unmount
+    // 9. Cleanup & Disposal on Unmount
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+      if (controls) controls.dispose();
       if (resizeObserver) resizeObserver.disconnect();
       else window.removeEventListener('resize', handleResize);
 

@@ -97,11 +97,6 @@ export default function ModelStatsPanel({ modelInfo, isLoading, error }) {
         <div className="header-title-group">
           <Activity className="icon-success" size={20} />
           <h2>Model Test Performance</h2>
-          <span className="info-tag">
-            {isPixelModel
-              ? 'Phase 5 Offline Evaluation (1.92M Test Pixels)'
-              : 'Block-Level Evaluation (328 Test 64x64 Patches)*'}
-          </span>
         </div>
         <div className="header-badge-group">
           <span className="badge-model">

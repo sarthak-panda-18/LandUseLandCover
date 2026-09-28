@@ -193,6 +193,12 @@
   width: 100% !important;
   height: 100% !important;
   outline: none;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.three-canvas-wrapper canvas:active {
+  cursor: grabbing;
 }
 
 .webgl-fallback {
@@ -480,6 +486,15 @@
   border-radius: 9999px;
 }
 
+.header-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .badge-model {
   display: inline-flex;
   align-items: center;
@@ -491,6 +506,7 @@
   border: 1px solid rgba(11, 57, 84, 0.2);
   padding: 0.25rem 0.75rem;
   border-radius: 8px;
+  white-space: nowrap;
 }
 
 /* Themed Icon Classes */
