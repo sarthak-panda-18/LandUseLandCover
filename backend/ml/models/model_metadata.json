@@ -1,40 +1,41 @@
 {
   "model_type": "RandomForestClassifier",
-  "version_note": "Compact Production Model: max_depth=30, max_leaf_nodes=20000, class_weight='balanced', min_samples_leaf=3, max_samples=0.35, compress=3 (File Size: 458.39 MB).",
-  "training_date": "2026-09-27 17:14:13",
+  "version_note": "RAM-Optimized Production Model: n_estimators=100, max_leaf_nodes=5000, min_samples_leaf=3, max_samples=0.35, compress=3 (File Size: 52.14 MB, RAM Delta: 260.22 MB).",
+  "training_date": "2026-09-28 14:08:53",
   "training_samples_count": 8976744,
   "validation_samples_count": 1923588,
   "hyperparameters": {
-    "n_estimators": 300,
-    "max_depth": 30,
-    "max_leaf_nodes": 20000,
+    "n_estimators": 100,
+    "max_depth": null,
+    "max_leaf_nodes": 5000,
     "min_samples_leaf": 3,
     "max_samples": 0.35,
     "class_weight": "balanced",
     "random_state": 42
   },
   "metrics": {
-    "validation_accuracy": 0.6627,
-    "test_accuracy": 0.6626,
-    "cohen_kappa": 0.5323,
-    "macro_avg_f1": 0.6234,
-    "weighted_avg_f1": 0.6981,
+    "validation_accuracy": 0.6249,
+    "test_accuracy": 0.625,
+    "cohen_kappa": 0.4972,
+    "macro_avg_f1": 0.613,
+    "weighted_avg_f1": 0.6744,
     "per_class_test_f1": {
-      "Water": 0.8693,
-      "Trees/Forest": 0.6353,
-      "Crops": 0.7003,
-      "Grassland": 0.0561,
-      "Built-up": 0.6895,
-      "Bare land": 0.7900
+      "Water": 0.8697,
+      "Trees/Forest": 0.6343,
+      "Crops": 0.6557,
+      "Grassland": 0.0459,
+      "Built-up": 0.6881,
+      "Bare land": 0.7846
     }
   },
-  "model_file_size_mb": 458.39,
+  "model_file_size_mb": 52.14,
+  "model_ram_delta_mb": 260.22,
   "feature_importances": {
-    "B2 (Blue)": 0.1861,
-    "B3 (Green)": 0.1978,
-    "B4 (Red)": 0.2319,
-    "B8 (NIR)": 0.2208,
-    "NDVI": 0.1634
+    "B2 (Blue)": 0.173,
+    "B3 (Green)": 0.215,
+    "B4 (Red)": 0.2363,
+    "B8 (NIR)": 0.227,
+    "NDVI": 0.1487
   },
   "class_mapping": {
     "0": "Water",
@@ -43,61 +44,5 @@
     "3": "Grassland",
     "4": "Built-up",
     "5": "Bare land"
-  },
-  "grid_search_history": [
-    {
-      "n_estimators": 100,
-      "max_depth": 20,
-      "val_accuracy": 0.6836,
-      "fit_time_seconds": 6.21
-    },
-    {
-      "n_estimators": 100,
-      "max_depth": 30,
-      "val_accuracy": 0.7347,
-      "fit_time_seconds": 6.83
-    },
-    {
-      "n_estimators": 100,
-      "max_depth": null,
-      "val_accuracy": 0.7412,
-      "fit_time_seconds": 7.07
-    },
-    {
-      "n_estimators": 200,
-      "max_depth": 20,
-      "val_accuracy": 0.6834,
-      "fit_time_seconds": 12.3
-    },
-    {
-      "n_estimators": 200,
-      "max_depth": 30,
-      "val_accuracy": 0.7367,
-      "fit_time_seconds": 14.5
-    },
-    {
-      "n_estimators": 200,
-      "max_depth": null,
-      "val_accuracy": 0.7428,
-      "fit_time_seconds": 14.74
-    },
-    {
-      "n_estimators": 300,
-      "max_depth": 20,
-      "val_accuracy": 0.6833,
-      "fit_time_seconds": 19.43
-    },
-    {
-      "n_estimators": 300,
-      "max_depth": 30,
-      "val_accuracy": 0.737,
-      "fit_time_seconds": 22.25
-    },
-    {
-      "n_estimators": 300,
-      "max_depth": null,
-      "val_accuracy": 0.7436,
-      "fit_time_seconds": 22.68
-    }
-  ]
+  }
 }

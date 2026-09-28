@@ -26,8 +26,8 @@ COPY . .
 
 # Download full model artifact from GitHub Release to replace Git LFS pointer
 RUN curl -fL --retry 3 -o ml/models/lulc_rf_model.joblib \
-    https://github.com/sarthak-panda-18/LandUseLandCover/releases/download/v1.0-model/lulc_rf_model.joblib \
-    && test "$(stat -c%s ml/models/lulc_rf_model.joblib)" -gt 100000000
+    https://github.com/sarthak-panda-18/LandUseLandCover/releases/download/v1.1-model/lulc_rf_model.joblib \
+    && test "$(stat -c%s ml/models/lulc_rf_model.joblib)" -gt 1000000
 
 # Expose default Cloud Run container port
 EXPOSE 8080

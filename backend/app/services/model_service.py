@@ -1,7 +1,7 @@
 """
 Model Service for LULC Classification
-Loads trained Random Forest model, scaler, and metadata once at startup,
-and provides fast in-memory tile inference.
+Provides lazy loading of trained Random Forest pixel model, scaler, and metadata,
+with memory-bounded chunked tile inference (250,000 pixels per batch).
 """
 
 import json
@@ -43,14 +43,16 @@ class ModelService:
         self.scaler = None
         self.metadata: Dict[str, Any] = {}
         self.test_metrics: Dict[str, Any] = {}
-        
         self.is_loaded = False
-        self.load_artifacts()
+        # Artifacts are loaded lazily on first inference request, NOT at startup.
 
-    def load_artifacts(self):
-        """Loads model, scaler, and metadata JSON files into memory."""
+    def ensure_loaded(self):
+        """Lazily loads model, scaler, and metadata JSON files on demand."""
+        if self.is_loaded:
+            return
+
         t_start = time.time()
-        logger.info(f"Loading LULC classification artifacts from {self.models_dir}...")
+        logger.info(f"[Lazy Loading] Loading LULC pixel RF model & scaler from {self.models_dir}...")
 
         if not self.model_path.exists():
             raise FileNotFoundError(f"Trained model artifact not found at {self.model_path}")
@@ -62,39 +64,46 @@ class ModelService:
         self.model = joblib.load(self.model_path)
 
         # 2. Load Model Metadata
-        if self.metadata_path.exists():
-            with open(self.metadata_path, "r", encoding="utf-8") as f:
-                self.metadata = json.load(f)
-        else:
+        self._load_json_metadata()
+
+        self.is_loaded = True
+        duration = time.time() - t_start
+        logger.info(f"LULC Pixel Model Service loaded in {duration:.2f}s!")
+
+    def _load_json_metadata(self):
+        """Loads lightweight JSON metadata without requiring model binary loading."""
+        if not self.metadata and self.metadata_path.exists():
+            try:
+                with open(self.metadata_path, "r", encoding="utf-8") as f:
+                    self.metadata = json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not load metadata JSON: {e}")
+
+        if not self.metadata:
             self.metadata = {
                 "model_type": "RandomForestClassifier",
                 "class_mapping": {k: v["name"] for k, v in CLASS_METADATA.items() if k != 255}
             }
 
-        # 3. Load Test Evaluation Metrics
-        if self.metrics_path.exists():
-            with open(self.metrics_path, "r", encoding="utf-8") as f:
-                self.test_metrics = json.load(f)
-        else:
-            self.test_metrics = {}
-
-        self.is_loaded = True
-        duration = time.time() - t_start
-        logger.info(f"LULC Model Service initialized successfully in {duration:.2f}s!")
+        if not self.test_metrics and self.metrics_path.exists():
+            try:
+                with open(self.metrics_path, "r", encoding="utf-8") as f:
+                    self.test_metrics = json.load(f)
+            except Exception as e:
+                logger.warning(f"Could not load test metrics JSON: {e}")
 
     def classify_tile(self, input_array: np.ndarray, batch_size: int = 250_000) -> Dict[str, Any]:
         """
-        Classifies a multi-band Sentinel-2 tile array.
+        Classifies a multi-band Sentinel-2 tile array with chunked memory-bounded execution.
         
         Args:
             input_array: numpy array of shape (5, H, W) or (H, W, 5) with bands (B2, B3, B4, B8, NDVI)
-            batch_size: batch chunk size for efficient in-memory prediction
+            batch_size: batch chunk size (default 250,000 pixels) for bounded RAM usage
             
         Returns:
             Dictionary containing classified 2D array, per-class counts, percentages, and metrics.
         """
-        if not self.is_loaded:
-            raise RuntimeError("ModelService artifacts are not loaded into memory.")
+        self.ensure_loaded()
 
         # Ensure shape (H, W, 5)
         if input_array.ndim != 3:
@@ -107,7 +116,7 @@ class ModelService:
         if input_array.shape[2] != 5:
             raise ValueError(f"Expected 5 bands [B2, B3, B4, B8, NDVI], but got {input_array.shape[2]} channels.")
 
-        height, width, num_bands = input_array.shape
+        height, width, _ = input_array.shape
         total_pixels = height * width
 
         # Flatten to (N, 5)
@@ -122,7 +131,6 @@ class ModelService:
         )
 
         valid_count = int(valid_mask.sum())
-        invalid_count = total_pixels - valid_count
 
         # Create output buffer initialized to 255 (masked/invalid)
         classified_flat = np.full(total_pixels, 255, dtype=np.uint8)
@@ -130,14 +138,13 @@ class ModelService:
         if valid_count > 0:
             X_valid = flat_features[valid_mask]
             
-            # Apply fitted scaler
-            X_scaled = self.scaler.transform(X_valid).astype(np.float32)
-
-            # Predict in memory-safe chunks
+            # Predict in bounded chunks of 250,000 pixels to restrict peak RAM
             preds_chunks = []
-            for i in range(0, len(X_scaled), batch_size):
-                chunk = X_scaled[i:i + batch_size]
-                preds_chunks.append(self.model.predict(chunk))
+            for i in range(0, len(X_valid), batch_size):
+                chunk_raw = X_valid[i:i + batch_size]
+                chunk_scaled = self.scaler.transform(chunk_raw).astype(np.float32)
+                chunk_pred = self.model.predict(chunk_scaled)
+                preds_chunks.append(chunk_pred)
 
             classified_flat[valid_mask] = np.concatenate(preds_chunks).astype(np.uint8)
 
@@ -178,6 +185,7 @@ class ModelService:
 
     def get_model_info(self) -> Dict[str, Any]:
         """Returns structured information about the trained model, hyperparameters, and test metrics."""
+        self._load_json_metadata()
         return {
             "model_type": self.metadata.get("model_type", "RandomForestClassifier"),
             "training_date": self.metadata.get("training_date"),

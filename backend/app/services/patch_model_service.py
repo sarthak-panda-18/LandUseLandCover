@@ -1,6 +1,6 @@
 """
 Patch-Based Model Service for LULC Classification
-Loads Random Forest Patch model (statistical features) and EfficientNetB0 Keras model (3-channel image patches),
+Provides lazy loading of Random Forest Patch model and EfficientNetB0 Keras model,
 and performs 64x64 non-overlapping sliding window block classification.
 """
 
@@ -38,39 +38,50 @@ class PatchModelService:
 
         self.rf_model = None
         self.efficientnet_model = None
-        
-        self.is_loaded = False
-        self.load_artifacts()
+        # Models are loaded lazily on demand, NOT at module import or startup.
 
-    def load_artifacts(self):
-        """Loads both Random Forest patch model and EfficientNetB0 Keras model."""
+    def _ensure_rf_model_loaded(self):
+        """Lazily loads Random Forest patch model on first use."""
+        if self.rf_model is not None:
+            return
+
         t_start = time.time()
-        logger.info(f"Loading patch classification models from {self.patch_models_dir}...")
+        logger.info(f"[Lazy Loading] Loading RF patch model from {self.rf_patch_path}...")
+        if not self.rf_patch_path.exists():
+            raise FileNotFoundError(f"RF patch model not found at {self.rf_patch_path}")
 
-        # 1. Load Random Forest Patch Model
-        if self.rf_patch_path.exists():
-            try:
-                self.rf_model = joblib.load(self.rf_patch_path)
-                logger.info(f"Loaded Random Forest Patch model from {self.rf_patch_path.name}")
-            except Exception as e:
-                logger.error(f"Error loading RF patch model: {e}", exc_info=True)
-        else:
-            logger.warning(f"RF patch model not found at {self.rf_patch_path}")
-
-        # 2. Load EfficientNetB0 Keras Model
-        if self.efficientnet_path.exists():
-            try:
-                import keras
-                self.efficientnet_model = keras.models.load_model(self.efficientnet_path, compile=False)
-                logger.info(f"Loaded EfficientNetB0 Patch model from {self.efficientnet_path.name}")
-            except Exception as e:
-                logger.error(f"Error loading EfficientNetB0 patch model: {e}", exc_info=True)
-        else:
-            logger.warning(f"EfficientNetB0 patch model not found at {self.efficientnet_path}")
-
-        self.is_loaded = (self.rf_model is not None or self.efficientnet_model is not None)
+        self.rf_model = joblib.load(self.rf_patch_path)
         duration = time.time() - t_start
-        logger.info(f"Patch Model Service loaded in {duration:.2f}s (Loaded: {self.is_loaded})")
+        logger.info(f"Random Forest Patch model loaded in {duration:.2f}s!")
+
+    def _ensure_efficientnet_model_loaded(self):
+        """Lazily imports TensorFlow/Keras and loads EfficientNetB0 on first use."""
+        if self.efficientnet_model is not None:
+            return
+
+        t_start = time.time()
+        logger.info(f"[Lazy Loading] Importing Keras/TensorFlow and loading EfficientNetB0 patch model from {self.efficientnet_path}...")
+        if not self.efficientnet_path.exists():
+            raise FileNotFoundError(f"EfficientNetB0 patch model not found at {self.efficientnet_path}")
+
+        # Set TensorFlow thread and memory controls before loading
+        os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+        os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+        os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+        # Lazy import to ensure zero TensorFlow overhead until explicitly requested
+        import keras
+        import tensorflow as tf
+        # Configure TF to limit threading allocations
+        try:
+            tf.config.threading.set_inter_op_parallelism_threads(1)
+            tf.config.threading.set_intra_op_parallelism_threads(1)
+        except Exception:
+            pass
+
+        self.efficientnet_model = keras.models.load_model(self.efficientnet_path, compile=False)
+        duration = time.time() - t_start
+        logger.info(f"EfficientNetB0 Patch model loaded in {duration:.2f}s!")
 
     def _extract_rf_features_for_patch(self, patch_5band: np.ndarray) -> np.ndarray:
         """
@@ -83,20 +94,8 @@ class PatchModelService:
            - Band 3: B8 (NIR)
            - Band 4: NDVI
            
-        2. For each band in that exact sequence (B2, B3, B4, B8, NDVI), compute 5 statistics in this exact order:
-           - mean   (np.mean)
-           - std    (np.std, default ddof=0)
-           - min    (np.min)
-           - max    (np.max)
-           - median (np.median)
-           directly on the raw reflectance values (no 255 rescaling).
-           
-        3. Concatenate into a single 25-element feature vector, grouped by band:
-           [B2_mean, B2_std, B2_min, B2_max, B2_median,
-            B3_mean, B3_std, B3_min, B3_max, B3_median,
-            B4_mean, B4_std, B4_min, B4_max, B4_median,
-            B8_mean, B8_std, B8_min, B8_max, B8_median,
-            NDVI_mean, NDVI_std, NDVI_min, NDVI_max, NDVI_median]
+        2. For each band in that exact sequence (B2, B3, B4, B8, NDVI), compute 5 statistics:
+           mean, std, min, max, median
         """
         features = []
         for b in range(5):
@@ -126,8 +125,7 @@ class PatchModelService:
     def _prepare_efficientnet_input_patch(self, patch_5band: np.ndarray) -> np.ndarray:
         """
         Converts 64x64x5 Sentinel-2 patch to 3-channel RGB image (B4, B3, B2)
-        and scales directly with a flat 255.0 multiplier on raw reflectance values
-        (no percentile stretching or per-image min-max normalization).
+        and scales directly with a flat 255.0 multiplier on raw reflectance values.
         """
         # Bands: 0: B2 (Blue), 1: B3 (Green), 2: B4 (Red)
         red = np.nan_to_num(patch_5band[..., 2], nan=0.0).astype(np.float32)
@@ -136,8 +134,6 @@ class PatchModelService:
 
         # Standard 3-channel RGB order for pretrained EfficientNetB0
         rgb = np.stack([red, green, blue], axis=-1)  # (64, 64, 3)
-
-        # Flat scaling matching notebook training: reflectance * 255.0
         rgb_scaled = rgb * 255.0
 
         return rgb_scaled.astype(np.float32)
@@ -153,10 +149,12 @@ class PatchModelService:
         Returns:
             Dictionary matching ModelService output format with full-resolution classified array (H, W).
         """
-        if model_choice == "rf_patch" and self.rf_model is None:
-            raise RuntimeError("Random Forest Patch model is not loaded.")
-        if model_choice == "efficientnet_patch" and self.efficientnet_model is None:
-            raise RuntimeError("EfficientNetB0 Patch model is not loaded.")
+        if model_choice == "rf_patch":
+            self._ensure_rf_model_loaded()
+        elif model_choice == "efficientnet_patch":
+            self._ensure_efficientnet_model_loaded()
+        else:
+            raise ValueError(f"Unknown model choice: {model_choice}")
 
         # Ensure input array is (H, W, 5)
         if input_array.ndim != 3:
@@ -219,14 +217,9 @@ class PatchModelService:
                 preds = self.rf_model.predict(X_batch).astype(np.uint8)
             elif model_choice == "efficientnet_patch":
                 import tensorflow as tf
-                X_raw_batch = np.array(patches_for_eff, dtype=np.float32)  # (N, 64, 64, 3)
-                # Resize from 64x64 to 224x224 as expected by the EfficientNet input layer
-                X_batch_224 = tf.image.resize(X_raw_batch, (224, 224), method="bilinear").numpy()
-                logger.info(
-                    f"[efficientnet_patch] Input batch shape: {X_batch_224.shape}, "
-                    f"First patch RGB center 3x3 sample: {np.round(X_batch_224[0, 110:113, 110:113, :], 2).tolist()}"
-                )
-                raw_probs = self.efficientnet_model.predict(X_batch_224, batch_size=64, verbose=0)
+                X_raw = np.array(patches_for_eff, dtype=np.float32)
+                X_224 = tf.image.resize(X_raw, (224, 224), method="bilinear")
+                raw_probs = self.efficientnet_model.predict(X_224, batch_size=32, verbose=0)
                 preds = np.argmax(raw_probs, axis=-1).astype(np.uint8)
 
             # 4. Paint predicted class uniformly across all 64x64 pixels for each block

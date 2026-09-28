@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.classify import router as classify_router
-from app.services.model_service import get_model_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,28 +20,22 @@ logger = logging.getLogger("lulc.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Lifespan context manager that warms up the Random Forest model and scaler
-    into memory at application startup.
+    Lifespan context manager. Startup does NOT pre-load any model artifacts,
+    enabling immediate startup and zero RAM footprint until requested.
     """
-    logger.info("Initializing LULC Classification Backend Application...")
-    try:
-        service = get_model_service()
-        logger.info("Random Forest model and scalers successfully loaded in memory.")
-    except Exception as e:
-        logger.error(f"Failed to pre-load model artifacts at startup: {e}")
-    
+    logger.info("Initializing LULC Classification Backend Application (Lazy Model Loading Enabled)...")
     yield
     logger.info("Shutting down LULC Classification Backend...")
 
 
 app = FastAPI(
     title="LULC Classification API",
-    description="Backend API for Sentinel-2 Land Use and Land Cover (LULC) Classification using Random Forest",
+    description="Backend API for Sentinel-2 Land Use and Land Cover (LULC) Classification using Random Forest and Deep Learning",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# Enable CORS for frontend integration (Vite server on port 5173 and general access)
+# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -62,16 +55,9 @@ app.include_router(classify_router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    """Health check endpoint to verify backend server status and model readiness."""
-    try:
-        service = get_model_service()
-        model_ready = service.is_loaded
-    except Exception:
-        model_ready = False
-
+    """Health check endpoint to verify backend server status immediately without loading any models."""
     return {
         "status": "ok",
-        "model_loaded": model_ready,
         "service": "LULC Classification Backend",
         "version": "1.0.0"
     }
