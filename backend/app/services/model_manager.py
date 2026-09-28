@@ -50,13 +50,17 @@ class ModelManager:
         self.unload_current_model()
         logger.info(f"[ModelManager] Loading pixel RF model & scaler from {self.models_dir}...")
 
-        if not self.pixel_model_path.exists():
-            raise FileNotFoundError(f"Trained model artifact not found at {self.pixel_model_path}")
+        # Prefer v2 compact model if present, fallback to v1
+        v2_model_path = self.models_dir / "lulc_rf_model_v2.joblib"
+        target_model_path = v2_model_path if v2_model_path.exists() else self.pixel_model_path
+
+        if not target_model_path.exists():
+            raise FileNotFoundError(f"Trained model artifact not found at {target_model_path}")
         if not self.scaler_path.exists():
             raise FileNotFoundError(f"Scaler artifact not found at {self.scaler_path}")
 
         scaler = joblib.load(self.scaler_path)
-        rf_model = joblib.load(self.pixel_model_path)
+        rf_model = joblib.load(target_model_path)
         # Prevent worker subprocess memory duplication
         if hasattr(rf_model, "n_jobs"):
             rf_model.n_jobs = 1
