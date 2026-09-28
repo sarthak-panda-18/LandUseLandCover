@@ -10,7 +10,7 @@ import {
   Globe,
 } from 'lucide-react';
 
-import { checkHealth, getModelInfo, classifyTile } from '../services/api';
+import { checkHealth, getModelInfo, classifyTile, API_BASE_URL } from '../services/api';
 import UploadPanel from '../components/UploadPanel';
 import ClassifiedMapView from '../components/ClassifiedMapView';
 import ClassBreakdownChart from '../components/ClassBreakdownChart';
@@ -141,7 +141,7 @@ export default function Dashboard() {
             <AlertTriangle size={18} className="alert-icon" />
             <div className="alert-content">
               <strong>Backend Connection Notice:</strong> The FastAPI server is not responding at{' '}
-              <code>http://127.0.0.1:8000</code>. Please start the backend service (
+              <code>{API_BASE_URL}</code>. Please start the backend service (
               <code>uvicorn app.main:app --port 8000</code>) to enable live classification.
             </div>
           </div>

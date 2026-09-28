@@ -7,7 +7,7 @@
  * - GET  /health
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
 /**
  * Checks backend server health and model warmup status.
@@ -25,7 +25,7 @@ export async function checkHealth() {
   } catch (error) {
     console.error('API checkHealth error:', error);
     throw new Error(
-      error.message || 'Cannot connect to backend server. Make sure the FastAPI service is running on port 8000.'
+      error.message || `Cannot connect to backend server. Make sure the FastAPI service is running at ${API_BASE_URL}.`
     );
   }
 }
@@ -126,7 +126,7 @@ export async function classifyTile(file, modelChoice = 'pixel_rf') {
   } catch (error) {
     console.error('API classifyTile error:', error);
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Network error: Unable to reach the backend API at http://127.0.0.1:8000. Is the server running?');
+      throw new Error(`Network error: Unable to reach the backend API at ${API_BASE_URL}. Is the server running?`);
     }
     throw error;
   }
