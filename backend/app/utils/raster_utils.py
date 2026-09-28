@@ -1,21 +1,22 @@
 """
 Raster Utilities Module for LULC Backend
-Handles GeoTIFF parsing with rasterio, NDVI computation if needed,
-RGBA color-mapping of classified arrays, and Base64 PNG image encoding.
+Handles streaming GeoTIFF reading with rasterio, memory-efficient True-Color preview generation,
+RGBA color-mapping of classified arrays, and Base64 PNG encoding.
 """
 
 import base64
 import io
 import logging
-from typing import Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 import rasterio
-from rasterio.io import MemoryFile
+from rasterio.enums import Resampling
 
 logger = logging.getLogger("lulc.utils.raster")
 
-# Color mapping matching Phase 5 specifications
+# Color mapping matching LULC specifications
 CLASS_PALETTE: Dict[int, Tuple[int, int, int, int]] = {
     0: (30, 136, 229, 255),    # Water: Vibrant Blue
     1: (46, 125, 50, 255),     # Trees/Forest: Dark Green
@@ -27,70 +28,69 @@ CLASS_PALETTE: Dict[int, Tuple[int, int, int, int]] = {
 }
 
 
-def read_geotiff_bytes(file_bytes: bytes) -> Tuple[np.ndarray, Dict[str, any]]:
+def get_geotiff_metadata(raster_path: Path) -> Dict[str, Any]:
+    """Reads basic spatial metadata and dimensions from GeoTIFF header without reading raster pixels."""
+    with rasterio.open(raster_path) as src:
+        return {
+            "width": src.width,
+            "height": src.height,
+            "band_count": src.count,
+            "crs": str(src.crs) if src.crs else "Unknown",
+            "bounds": {
+                "left": src.bounds.left,
+                "bottom": src.bounds.bottom,
+                "right": src.bounds.right,
+                "top": src.bounds.top
+            }
+        }
+
+
+def generate_rgb_preview_from_file(raster_path: Path) -> Optional[str]:
     """
-    Reads GeoTIFF bytes into a 5-band numpy array (5, H, W) [B2, B3, B4, B8, NDVI].
-    
-    Args:
-        file_bytes: Raw bytes from uploaded .tif file
-        
-    Returns:
-        Tuple of (array of shape (5, H, W), metadata dictionary)
-        
-    Raises:
-        ValueError: If file is corrupted, invalid format, or unsupported band count.
+    Generates True-Color RGB preview (Base64 PNG) from bands (B4, B3, B2) using a decimated read
+    and percentile contrast stretching, requiring negligible memory (< 10 MB).
     """
     try:
-        with MemoryFile(file_bytes) as memfile:
-            with memfile.open() as src:
-                band_count = src.count
-                height = src.height
-                width = src.width
-                crs = str(src.crs) if src.crs else "Unknown"
-                bounds = src.bounds
+        with rasterio.open(raster_path) as src:
+            h, w = src.height, src.width
+            # Read bands 3 (Red), 2 (Green), 1 (Blue) at manageable preview resolution (max 1024x1024)
+            preview_max_dim = 1024
+            scale_factor = min(1.0, preview_max_dim / max(h, w))
+            out_h = max(1, int(h * scale_factor))
+            out_w = max(1, int(w * scale_factor))
 
-                if band_count < 4:
-                    raise ValueError(
-                        f"Uploaded GeoTIFF has only {band_count} band(s). "
-                        "Sentinel-2 LULC classification requires at least 4 bands (B2, B3, B4, B8) or 5 bands (B2, B3, B4, B8, NDVI)."
-                    )
+            # Decimated read directly into 3 channels float32
+            rgb = src.read(
+                [3, 2, 1],
+                out_shape=(3, out_h, out_w),
+                resampling=Resampling.bilinear
+            ).astype(np.float32)
 
-                raw_raster = src.read().astype(np.float32)  # Shape: (band_count, H, W)
+            # Transpose to (out_h, out_w, 3)
+            rgb = np.transpose(rgb, (1, 2, 0))
 
-                # If 5 or more bands, take the first 5 [B2, B3, B4, B8, NDVI]
-                if band_count >= 5:
-                    processed_raster = raw_raster[:5]
-                elif band_count == 4:
-                    # Automatically compute NDVI = (B8 - B4) / (B8 + B4 + 1e-6)
-                    # Band 0: B2, Band 1: B3, Band 2: B4, Band 3: B8
-                    b4_red = raw_raster[2]
-                    b8_nir = raw_raster[3]
-                    
-                    denom = b8_nir + b4_red
-                    ndvi = np.where(denom != 0, (b8_nir - b4_red) / (denom + 1e-6), 0.0)
-                    processed_raster = np.concatenate([raw_raster, ndvi[np.newaxis, ...]], axis=0)
+            # Percentile contrast stretch per channel (2-98%)
+            rgb_stretched = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+            for i in range(3):
+                channel = rgb[..., i]
+                valid_px = channel[channel > 0]
+                if len(valid_px) > 0:
+                    p2, p98 = np.percentile(valid_px, (2, 98))
+                    if p98 > p2:
+                        clipped = np.clip((channel - p2) / (p98 - p2), 0, 1)
+                        rgb_stretched[..., i] = (clipped * 255).astype(np.uint8)
+                    else:
+                        rgb_stretched[..., i] = np.clip(channel, 0, 255).astype(np.uint8)
 
-                metadata = {
-                    "width": width,
-                    "height": height,
-                    "band_count": band_count,
-                    "crs": crs,
-                    "bounds": {
-                        "left": bounds.left,
-                        "bottom": bounds.bottom,
-                        "right": bounds.right,
-                        "top": bounds.top
-                    }
-                }
+            img = Image.fromarray(rgb_stretched, mode="RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+            return f"data:image/png;base64,{b64_str}"
 
-                return processed_raster, metadata
-
-    except rasterio.errors.RasterioError as e:
-        raise ValueError(f"Failed to decode GeoTIFF image: {str(e)}")
     except Exception as e:
-        if isinstance(e, ValueError):
-            raise e
-        raise ValueError(f"Error parsing uploaded raster: {str(e)}")
+        logger.warning(f"Could not generate RGB preview: {e}")
+        return None
 
 
 def classified_array_to_png_bytes(
@@ -99,15 +99,7 @@ def classified_array_to_png_bytes(
     blur_radius: float = 4.0
 ) -> bytes:
     """
-    Converts a 2D integer class array (H, W) into an RGBA PNG byte buffer.
-    
-    IMPORTANT ARCHITECTURAL SEPARATION:
-    - The classification metrics, per-class pixel counts, percentages, and analytics
-      are strictly computed on the raw discrete integer class array BEFORE this function.
-    - The Gaussian blur smoothing applied here is STRICTLY visual/cosmetic for display
-      purposes on block-level patch predictions (rf_patch, efficientnet_patch).
-    - Transparent / masked pixels (value 255) are preserved sharply by keeping the original
-      binary alpha channel intact so transparency never bleeds into classified regions.
+    Converts a 2D uint8 class array (H, W) into an RGBA PNG byte buffer.
     """
     height, width = classified_array.shape
     rgba_image = np.zeros((height, width, 4), dtype=np.uint8)
@@ -120,12 +112,9 @@ def classified_array_to_png_bytes(
 
     if apply_smoothing:
         from PIL import ImageFilter
-        # 1. Split RGBA channels
         r, g, b, a = img.split()
-        # 2. Merge RGB channels and apply Gaussian blur to the color image only
         rgb_img = Image.merge("RGB", (r, g, b))
         blurred_rgb = rgb_img.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-        # 3. Re-attach the original sharp unblurred alpha channel (preserving transparent masked areas)
         br, bg, bb = blurred_rgb.split()
         img = Image.merge("RGBA", (br, bg, bb, a))
 
@@ -141,7 +130,6 @@ def classified_array_to_base64(
 ) -> str:
     """
     Converts a 2D integer class array into a data URL base64 string: 'data:image/png;base64,...'
-    Optionally applies visual-only smoothing to soften 64x64 block boundaries for patch models.
     """
     png_bytes = classified_array_to_png_bytes(
         classified_array,
@@ -150,38 +138,3 @@ def classified_array_to_base64(
     )
     b64_str = base64.b64encode(png_bytes).decode("utf-8")
     return f"data:image/png;base64,{b64_str}"
-
-
-def generate_rgb_preview_base64(input_raster: np.ndarray) -> Optional[str]:
-    """
-    Creates a True-Color RGB satellite thumbnail (Base64) from bands (B4, B3, B2).
-    """
-    try:
-        # Expected input shape: (5, H, W) -> Red: index 2, Green: index 1, Blue: index 0
-        red = input_raster[2].astype(np.float32)
-        green = input_raster[1].astype(np.float32)
-        blue = input_raster[0].astype(np.float32)
-
-        rgb = np.stack([red, green, blue], axis=-1)
-
-        # Percentile contrast stretch per channel (2-98%)
-        rgb_stretched = np.zeros_like(rgb, dtype=np.uint8)
-        for i in range(3):
-            channel = rgb[..., i]
-            valid_px = channel[channel > 0]
-            if len(valid_px) > 0:
-                p2, p98 = np.percentile(valid_px, (2, 98))
-                if p98 > p2:
-                    clipped = np.clip((channel - p2) / (p98 - p2), 0, 1)
-                    rgb_stretched[..., i] = (clipped * 255).astype(np.uint8)
-                else:
-                    rgb_stretched[..., i] = np.clip(channel, 0, 255).astype(np.uint8)
-
-        img = Image.fromarray(rgb_stretched, mode="RGB")
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
-        return f"data:image/png;base64,{b64_str}"
-    except Exception as e:
-        logger.warning(f"Could not generate RGB preview: {e}")
-        return None
