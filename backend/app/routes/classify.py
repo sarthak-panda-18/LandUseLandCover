@@ -11,8 +11,9 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from app.services.model_service import ModelService, get_model_service
 from app.services.patch_model_service import PatchModelService, get_patch_model_service
@@ -29,6 +30,19 @@ router = APIRouter(prefix="/api", tags=["LULC Classification"])
 # Maximum allowed file upload size: 200 MB
 MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024
 ALLOWED_MODELS = ["pixel_rf", "rf_patch", "efficientnet_patch"]
+
+SAMPLE_TILES = [
+    {"filename": "Vijayawada_LULC_Input_2025-0000000000-0000000000.tif", "size_mb": 104.14},
+    {"filename": "Vijayawada_LULC_Input_2025-0000000000-0000002048.tif", "size_mb": 105.22},
+    {"filename": "Vijayawada_LULC_Input_2025-0000000000-0000004096.tif", "size_mb": 46.98},
+    {"filename": "Vijayawada_LULC_Input_2025-0000002048-0000000000.tif", "size_mb": 65.85},
+    {"filename": "Vijayawada_LULC_Input_2025-0000002048-0000002048.tif", "size_mb": 66.01},
+    {"filename": "Vijayawada_LULC_Input_2025-0000002048-0000004096.tif", "size_mb": 29.62},
+]
+VALID_SAMPLE_FILENAMES = {t["filename"] for t in SAMPLE_TILES}
+GITHUB_RELEASE_SAMPLE_BASE_URL = (
+    "https://github.com/sarthak-panda-18/LandUseLandCover/releases/download/v1.0-sample-tiles"
+)
 
 
 @router.post("/classify", summary="Classify Sentinel-2 GeoTIFF Tile")
@@ -208,28 +222,62 @@ def get_legend_endpoint():
 
 @router.get("/sample-tiles", summary="List Available Sample Sentinel-2 Tiles")
 def list_sample_tiles():
-    """Returns list of bundled sample Sentinel-2 GeoTIFF tiles."""
-    project_root = Path(__file__).resolve().parents[3]
-    input_dir = project_root / "dataset" / "LULCzip" / "LULC" / "input"
-    if not input_dir.exists():
-        return []
-    files = sorted(list(input_dir.glob("*.tif")))
+    """Returns hardcoded list of available sample Sentinel-2 GeoTIFF tiles."""
     return [
         {
-            "filename": f.name,
-            "size_mb": round(f.stat().st_size / (1024 * 1024), 2),
-            "label": f"Tile {i+1} ({round(f.stat().st_size / (1024 * 1024), 1)} MB)"
+            "filename": tile["filename"],
+            "size_mb": tile["size_mb"],
+            "label": f"Tile {i+1} ({round(tile['size_mb'], 1)} MB)"
         }
-        for i, f in enumerate(files)
+        for i, tile in enumerate(SAMPLE_TILES)
     ]
 
 
 @router.get("/sample-tiles/{filename}", summary="Fetch Sample Sentinel-2 Tile Bytes")
-def get_sample_tile(filename: str):
-    """Streams a sample Sentinel-2 GeoTIFF tile."""
-    project_root = Path(__file__).resolve().parents[3]
-    input_dir = project_root / "dataset" / "LULCzip" / "LULC" / "input"
-    target_path = input_dir / filename
-    if not target_path.exists() or not target_path.name.endswith(".tif"):
-        raise HTTPException(status_code=404, detail="Sample tile not found")
-    return FileResponse(path=str(target_path), media_type="image/tiff", filename=filename)
+async def get_sample_tile(filename: str):
+    """Streams a sample Sentinel-2 GeoTIFF tile directly from GitHub releases."""
+    if filename not in VALID_SAMPLE_FILENAMES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample tile not found"
+        )
+
+    url = f"{GITHUB_RELEASE_SAMPLE_BASE_URL}/{filename}"
+
+    client = httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60.0, connect=15.0))
+    try:
+        req = client.build_request("GET", url)
+        res = await client.send(req, stream=True)
+        if res.status_code != 200:
+            await res.aclose()
+            await client.aclose()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch sample tile from GitHub release (HTTP {res.status_code})"
+            )
+    except httpx.RequestError as exc:
+        await client.aclose()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Network error while connecting to GitHub release: {str(exc)}"
+        )
+
+    async def stream_chunks():
+        try:
+            async for chunk in res.aiter_bytes(chunk_size=1024 * 1024):
+                yield chunk
+        finally:
+            await res.aclose()
+            await client.aclose()
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    if "content-length" in res.headers:
+        headers["Content-Length"] = res.headers["content-length"]
+
+    return StreamingResponse(
+        stream_chunks(),
+        media_type="image/tiff",
+        headers=headers
+    )
