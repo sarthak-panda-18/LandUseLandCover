@@ -51,7 +51,7 @@ export default function Dashboard() {
     setIsCheckingHealth(true);
     try {
       const healthRes = await checkHealth();
-      setBackendHealthy(healthRes?.status === 'ok' && healthRes?.model_loaded);
+      setBackendHealthy(healthRes?.status === 'ok' && (healthRes?.model_loaded !== false));
     } catch (err) {
       setBackendHealthy(false);
       console.warn('Backend health check failed:', err.message);

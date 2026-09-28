@@ -9,24 +9,71 @@
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 
+// Default timeout: 15s (gives Render free-tier instances sufficient time to wake from spin-down)
+const DEFAULT_TIMEOUT_MS = 15000;
+
 /**
- * Checks backend server health and model warmup status.
+ * Fetch wrapper with AbortController timeout support.
+ * 
+ * @param {string} url - Target URL
+ * @param {RequestInit} [options={}] - Standard fetch options
+ * @param {number} [timeoutMs=15000] - Timeout duration in milliseconds
+ * @returns {Promise<Response>}
  */
-export async function checkHealth() {
+async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const res = await fetch(`${API_BASE_URL}/health`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
     });
-    if (!res.ok) {
-      throw new Error(`Health check failed with HTTP ${res.status}`);
+    return res;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
     }
-    return await res.json();
-  } catch (error) {
-    console.error('API checkHealth error:', error);
-    throw new Error(
-      error.message || `Cannot connect to backend server. Make sure the FastAPI service is running at ${API_BASE_URL}.`
-    );
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Checks backend server health and status.
+ * Uses a 15-second timeout and retries once after a 2-second delay upon initial failure.
+ * 
+ * @param {number} [retries=1] - Number of retry attempts on failure
+ * @param {number} [retryDelayMs=2000] - Delay before retrying in milliseconds
+ * @returns {Promise<Object>} Backend health payload
+ */
+export async function checkHealth(retries = 1, retryDelayMs = 2000) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        `${API_BASE_URL}/health`,
+        {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        },
+        DEFAULT_TIMEOUT_MS
+      );
+      if (!res.ok) {
+        throw new Error(`Health check failed with HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (error) {
+      if (attempt < retries) {
+        console.warn(`API checkHealth attempt ${attempt + 1} failed (${error.message}). Retrying in ${retryDelayMs / 1000}s...`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      } else {
+        console.error('API checkHealth error after retries:', error);
+        throw new Error(
+          error.message || `Cannot connect to backend server. Make sure the FastAPI service is running at ${API_BASE_URL}.`
+        );
+      }
+    }
   }
 }
 
@@ -42,10 +89,14 @@ export async function getModelInfo(modelChoice = 'pixel_rf') {
     if (modelChoice) {
       url.searchParams.set('model', modelChoice);
     }
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await fetchWithTimeout(
+      url.toString(),
+      {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      },
+      DEFAULT_TIMEOUT_MS
+    );
 
     if (!res.ok) {
       let errDetail = `HTTP ${res.status}`;
@@ -137,7 +188,14 @@ export async function classifyTile(file, modelChoice = 'pixel_rf') {
  */
 export async function getSampleTiles() {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/sample-tiles`);
+    const res = await fetchWithTimeout(
+      `${API_BASE_URL}/api/sample-tiles`,
+      {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      },
+      DEFAULT_TIMEOUT_MS
+    );
     if (!res.ok) return [];
     return await res.json();
   } catch (err) {
@@ -150,7 +208,13 @@ export async function getSampleTiles() {
  * Downloads a sample tile as a File object to classify directly.
  */
 export async function fetchSampleTileFile(filename) {
-  const res = await fetch(`${API_BASE_URL}/api/sample-tiles/${filename}`);
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/api/sample-tiles/${filename}`,
+    {
+      method: 'GET',
+    },
+    DEFAULT_TIMEOUT_MS
+  );
   if (!res.ok) {
     throw new Error(`Failed to load sample tile: HTTP ${res.status}`);
   }
