@@ -1011,6 +1011,10 @@
 }
 
 .sample-tile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   font-size: 0.725rem;
   font-weight: 600;
   background: #FFFFFF;
@@ -1019,6 +1023,18 @@
   padding: 0.3rem 0.65rem;
   border-radius: 6px;
   transition: all 0.2s ease;
+}
+
+.sample-tile-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sample-tile-btn.loading {
+  background: rgba(46, 134, 171, 0.12);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+  font-weight: 700;
 }
 
 .sample-tile-btn:hover:not(:disabled) {
@@ -1032,6 +1048,27 @@
   border-color: var(--color-accent);
   color: #FFFFFF;
   box-shadow: 0 2px 6px rgba(45, 106, 79, 0.25);
+}
+
+.sample-fetch-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(242, 165, 65, 0.15);
+  border: 1px solid rgba(242, 165, 65, 0.4);
+  border-radius: 6px;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.sample-error-alert {
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
 }
 
 /* Upload Actions & Buttons */

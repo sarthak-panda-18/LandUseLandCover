@@ -38,8 +38,12 @@ export default function UploadPanel({
   const [isDragOver, setIsDragOver] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [sampleTiles, setSampleTiles] = useState([]);
-  const [isLoadingSample, setIsLoadingSample] = useState(false);
+  const [loadingSampleFilename, setLoadingSampleFilename] = useState(null);
+  const [sampleFetchSeconds, setSampleFetchSeconds] = useState(0);
+  const [sampleError, setSampleError] = useState(null);
   const fileInputRef = useRef(null);
+
+  const isLoadingSample = Boolean(loadingSampleFilename);
 
   // Fetch sample tiles list
   useEffect(() => {
@@ -47,6 +51,23 @@ export default function UploadPanel({
       if (tiles && tiles.length > 0) setSampleTiles(tiles);
     });
   }, []);
+
+  // Timer for sample tile download tracking (shows warning after 5s)
+  useEffect(() => {
+    let interval = null;
+    if (loadingSampleFilename) {
+      setSampleFetchSeconds(0);
+      interval = setInterval(() => {
+        setSampleFetchSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setSampleFetchSeconds(0);
+      if (interval) clearInterval(interval);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loadingSampleFilename]);
 
   // Timer for active inference
   useEffect(() => {
@@ -66,6 +87,7 @@ export default function UploadPanel({
 
   const handleFileChange = (e) => {
     if (onClearError) onClearError();
+    setSampleError(null);
     const file = e.target.files?.[0];
     if (file) {
       validateAndSetFile(file);
@@ -84,14 +106,15 @@ export default function UploadPanel({
 
   const handleSelectSample = async (tileMeta) => {
     if (onClearError) onClearError();
-    setIsLoadingSample(true);
+    setSampleError(null);
+    setLoadingSampleFilename(tileMeta.filename);
     try {
       const file = await fetchSampleTileFile(tileMeta.filename);
       setSelectedFile(file);
     } catch (err) {
-      alert(`Could not load sample tile: ${err.message}`);
+      setSampleError(err.message || 'Failed to download sample tile from server.');
     } finally {
-      setIsLoadingSample(false);
+      setLoadingSampleFilename(null);
     }
   };
 
@@ -112,6 +135,7 @@ export default function UploadPanel({
     e.stopPropagation();
     setIsDragOver(false);
     if (onClearError) onClearError();
+    setSampleError(null);
     const file = e.dataTransfer.files?.[0];
     if (file) {
       validateAndSetFile(file);
@@ -126,6 +150,7 @@ export default function UploadPanel({
   const handleClear = (e) => {
     e.stopPropagation();
     setSelectedFile(null);
+    setSampleError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (onClearError) onClearError();
   };
@@ -249,21 +274,54 @@ export default function UploadPanel({
             <span>Quick Test Sample Tiles:</span>
           </div>
           <div className="sample-tiles-list">
-            {sampleTiles.map((t, idx) => (
-              <button
-                key={t.filename}
-                type="button"
-                className={`sample-tile-btn ${selectedFile?.name === t.filename ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSelectSample(t);
-                }}
-                disabled={isLoadingSample}
-              >
-                Tile {idx + 1} ({t.size_mb} MB)
-              </button>
-            ))}
+            {sampleTiles.map((t, idx) => {
+              const isLoadingThis = loadingSampleFilename === t.filename;
+              const isSelected = selectedFile?.name === t.filename;
+
+              return (
+                <button
+                  key={t.filename}
+                  type="button"
+                  className={`sample-tile-btn ${isSelected ? 'active' : ''} ${isLoadingThis ? 'loading' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectSample(t);
+                  }}
+                  disabled={isLoadingSample}
+                  title={isLoadingThis ? 'Downloading sample GeoTIFF tile...' : `Select Tile ${idx + 1}`}
+                >
+                  {isLoadingThis ? (
+                    <>
+                      <RefreshCw className="spin-icon" size={12} />
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    `Tile ${idx + 1} (${t.size_mb} MB)`
+                  )}
+                </button>
+              );
+            })}
           </div>
+
+          {/* 5-second slow fetch warning */}
+          {loadingSampleFilename && sampleFetchSeconds >= 5 && (
+            <div className="sample-fetch-notice">
+              <RefreshCw className="spin-icon" size={13} />
+              <span>
+                Downloading tile from server, this can take up to a minute on the free hosting tier.
+              </span>
+            </div>
+          )}
+
+          {/* Inline Sample Tile Error Display */}
+          {sampleError && (
+            <div className="error-alert sample-error-alert">
+              <AlertCircle size={16} className="error-icon" />
+              <div className="error-text">
+                <strong>Sample Tile Error:</strong> {sampleError}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

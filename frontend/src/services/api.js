@@ -122,7 +122,40 @@ export function getLegendUrl() {
 }
 
 /**
+ * Fetches the current status of an asynchronous classification job.
+ * 
+ * @param {string} jobId - UUID of the classification job
+ * @returns {Promise<Object>} Job status payload { job_id, status, result, error, created_at, updated_at }
+ */
+export async function getJobStatus(jobId) {
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/api/classify/status/${jobId}`,
+    {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    },
+    DEFAULT_TIMEOUT_MS
+  );
+
+  if (res.status === 404) {
+    throw new Error('Classification job expired or not found. Please try uploading again.');
+  }
+
+  if (!res.ok) {
+    let errorMsg = `Server returned HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData.detail) errorMsg = errorData.detail;
+    } catch (_) {}
+    throw new Error(`Failed to check job status: ${errorMsg}`);
+  }
+
+  return await res.json();
+}
+
+/**
  * Uploads a Sentinel-2 GeoTIFF (.tif / .tiff) file to be classified by the backend model.
+ * Uses an asynchronous job pattern: initiates job (202 Accepted) and polls status until complete.
  * 
  * @param {File} file - GeoTIFF raster file
  * @param {string} modelChoice - Selected model ('pixel_rf' | 'rf_patch' | 'efficientnet_patch')
@@ -158,6 +191,10 @@ export async function classifyTile(file, modelChoice = 'pixel_rf') {
       body: formData,
     });
 
+    if (res.status === 429) {
+      throw new Error('Server is busy processing another request, please try again in a moment.');
+    }
+
     if (!res.ok) {
       let errorMsg = `Server returned HTTP ${res.status}`;
       try {
@@ -172,8 +209,55 @@ export async function classifyTile(file, modelChoice = 'pixel_rf') {
       throw new Error(errorMsg);
     }
 
-    const data = await res.json();
-    return data;
+    const initData = await res.json();
+    const jobId = initData?.job_id;
+    if (!jobId) {
+      throw new Error('Failed to start classification job: No job ID returned from server.');
+    }
+
+    // Poll GET /api/classify/status/{jobId} every 2 seconds
+    const POLL_INTERVAL_MS = 2000;
+    const MAX_POLL_TIME_MS = 10 * 60 * 1000; // 10 minutes timeout limit
+    const startTime = Date.now();
+
+    while (true) {
+      if (Date.now() - startTime > MAX_POLL_TIME_MS) {
+        throw new Error('Classification timed out after 10 minutes. Please try again with a smaller tile or faster model.');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+      let jobData;
+      try {
+        jobData = await getJobStatus(jobId);
+      } catch (pollErr) {
+        if (pollErr.message.includes('expired or not found')) {
+          throw pollErr;
+        }
+        console.warn(`Polling status check encountered transient error: ${pollErr.message}. Retrying...`);
+        continue;
+      }
+
+      const jobStatus = jobData?.status;
+
+      if (jobStatus === 'done') {
+        if (!jobData.result) {
+          throw new Error('Classification completed but no result payload was returned.');
+        }
+        return jobData.result;
+      }
+
+      if (jobStatus === 'error') {
+        throw new Error(jobData.error || 'Classification failed due to an internal server error.');
+      }
+
+      if (jobStatus === 'pending' || jobStatus === 'processing') {
+        // Still running, continue polling
+        continue;
+      }
+
+      throw new Error(`Unexpected job status '${jobStatus}' received from server.`);
+    }
   } catch (error) {
     console.error('API classifyTile error:', error);
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
